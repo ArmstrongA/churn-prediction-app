@@ -1,91 +1,56 @@
 version: 2.1
 
-orbs:
-  docker: circleci/docker@2.1.1
-  python: circleci/python@2.0
-
 jobs:
   test:
     docker:
       - image: cimg/python:3.12
     steps:
       - checkout
-      - python/install-packages:
-          pkg-manager: pip
-          # Instead of using 'packages', we'll use requirements file
-          requirements-file: requirements.txt
+      - run:
+          name: Install dependencies
+          command: |
+            python -m venv venv
+            . venv/bin/activate
+            pip install -r requirements.txt
       - run:
           name: Run tests
           command: |
-            pytest tests/ --cov=./ --cov-report=xml
-      - store_test_results:
-          path: test-results
-      - store_artifacts:
-          path: coverage.xml
-          destination: coverage-report
+            . venv/bin/activate
+            pytest
 
   build:
     docker:
       - image: cimg/python:3.12
     steps:
       - checkout
-      - setup_remote_docker
-      - docker/build:
-          image: $DOCKER_IMAGE
-          tag: $CIRCLE_SHA1
-      - docker/push:
-          image: $DOCKER_IMAGE
-          tag: $CIRCLE_SHA1
+      - run:
+          name: Build Docker image
+          command: |
+            docker build -t churn-prediction-app:latest .
 
-  deploy-staging:
+  deploy:
     docker:
       - image: cimg/python:3.12
     steps:
       - checkout
       - run:
-          name: Install deployment dependencies
+          name: Deploy to staging/production
           command: |
-            pip install ansible
-      - run:
-          name: Deploy to staging
-          command: |
-            ansible-playbook deploy/staging.yml -i deploy/inventory/staging
-
-  deploy-production:
-    docker:
-      - image: cimg/python:3.12
-    steps:
-      - checkout
-      - run:
-          name: Install deployment dependencies
-          command: |
-            pip install ansible
-      - run:
-          name: Deploy to production
-          command: |
-            ansible-playbook deploy/production.yml -i deploy/inventory/production
+            echo "Deploying to staging/production..."
+            # Add your deployment script here (e.g., Kubernetes, AWS ECS, etc.)
 
 workflows:
   version: 2
-  build-test-deploy:
+  test-build-deploy:
     jobs:
       - test
       - build:
           requires:
             - test
-          filters:
-            branches:
-              only: main
-      - deploy-staging:
+      - deploy:
           requires:
             - build
           filters:
             branches:
-              only: main
-      - approve-production:
-          type: approval
-          requires:
-            - deploy-staging
-      - deploy-production:
-          requires:
-            - approve-production
+              only:
+                - main  # Only deploy from the main branch
