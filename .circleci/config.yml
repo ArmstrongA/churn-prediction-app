@@ -7,19 +7,13 @@ orbs:
 jobs:
   test:
     docker:
-      - image: cimg/python:3.9
+      - image: cimg/python:3.12
     steps:
       - checkout
       - python/install-packages:
           pkg-manager: pip
-          packages:
-            - pytest
-            - pytest-cov
-            - fastapi
-            - uvicorn
-            - scikit-learn
-            - pandas
-            - numpy
+          # Instead of using 'packages', we'll use requirements file
+          requirements-file: requirements.txt
       - run:
           name: Run tests
           command: |
@@ -32,7 +26,7 @@ jobs:
 
   build:
     docker:
-      - image: cimg/python:3.9
+      - image: cimg/python:3.12
     steps:
       - checkout
       - setup_remote_docker
@@ -45,7 +39,7 @@ jobs:
 
   deploy-staging:
     docker:
-      - image: cimg/python:3.9
+      - image: cimg/python:3.12
     steps:
       - checkout
       - run:
@@ -59,7 +53,7 @@ jobs:
 
   deploy-production:
     docker:
-      - image: cimg/python:3.9
+      - image: cimg/python:3.12
     steps:
       - checkout
       - run:
