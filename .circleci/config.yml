@@ -1,54 +1,97 @@
 version: 2.1
 
+orbs:
+  docker: circleci/docker@2.1.1
+  python: circleci/python@2.0
+
 jobs:
-  # Install Dependencies and Run Tests
   test:
     docker:
-      - image: circleci/python:3.9
+      - image: cimg/python:3.9
+    steps:
+      - checkout
+      - python/install-packages:
+          pkg-manager: pip
+          packages:
+            - pytest
+            - pytest-cov
+            - fastapi
+            - uvicorn
+            - scikit-learn
+            - pandas
+            - numpy
+      - run:
+          name: Run tests
+          command: |
+            pytest tests/ --cov=./ --cov-report=xml
+      - store_test_results:
+          path: test-results
+      - store_artifacts:
+          path: coverage.xml
+          destination: coverage-report
+
+  build:
+    docker:
+      - image: cimg/python:3.9
     steps:
       - checkout
       - setup_remote_docker
-      - restore_cache:
-          keys:
-            - v1-dependencies-{{ checksum "requirements.txt" }}
-      - run:
-          name: Install Dependencies
-          command: |
-            python -m venv venv
-            . venv/bin/activate
-            pip install -r requirements.txt
-      - save_cache:
-          paths:
-            - "./venv"
-          key: v1-dependencies-{{ checksum "requirements.txt" }}
-      - run:
-          name: Run Tests
-          command: |
-            . venv/bin/activate
-            pytest tests --disable-warnings
+      - docker/build:
+          image: $DOCKER_IMAGE
+          tag: $CIRCLE_SHA1
+      - docker/push:
+          image: $DOCKER_IMAGE
+          tag: $CIRCLE_SHA1
 
-  # Build Docker Image and Push to Docker Hub
-  build_and_push:
+  deploy-staging:
     docker:
-      - image: circleci/python:3.9
+      - image: cimg/python:3.9
     steps:
       - checkout
-      - setup_remote_docker:
-          version: 20.10.7
       - run:
-          name: Build Docker Image
-          command: docker build -t your-dockerhub-username/churn-prediction-app:$CIRCLE_SHA1 .
-      - run:
-          name: Push Docker Image
+          name: Install deployment dependencies
           command: |
-            echo $DOCKERHUB_PASS | docker login -u $DOCKERHUB_USER --password-stdin
-            docker push your-dockerhub-username/churn-prediction-app:$CIRCLE_SHA1
+            pip install ansible
+      - run:
+          name: Deploy to staging
+          command: |
+            ansible-playbook deploy/staging.yml -i deploy/inventory/staging
+
+  deploy-production:
+    docker:
+      - image: cimg/python:3.9
+    steps:
+      - checkout
+      - run:
+          name: Install deployment dependencies
+          command: |
+            pip install ansible
+      - run:
+          name: Deploy to production
+          command: |
+            ansible-playbook deploy/production.yml -i deploy/inventory/production
 
 workflows:
   version: 2
-  ci_cd:
+  build-test-deploy:
     jobs:
       - test
-      - build_and_push:
+      - build:
           requires:
             - test
+          filters:
+            branches:
+              only: main
+      - deploy-staging:
+          requires:
+            - build
+          filters:
+            branches:
+              only: main
+      - approve-production:
+          type: approval
+          requires:
+            - deploy-staging
+      - deploy-production:
+          requires:
+            - approve-production

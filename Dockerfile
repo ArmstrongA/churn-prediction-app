@@ -1,18 +1,29 @@
-# Base image
-FROM python:3.9-slim
+# Use an official Python runtime as the base image
+FROM python:3.12.9-bookworm
 
-# Set working directory
+# Set the working directory in the container
 WORKDIR /app
 
-# Copy requirements and install dependencies
+# Copy the requirements file into the container
 COPY requirements.txt .
+
+# Install the required packages
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application files
-COPY . .
+# Copy the model files
+COPY baseline_churn_model.pkl .
+COPY scaler.pkl .
 
-# Expose port
+# Copy the application code
+COPY main.py .
+COPY prediction_pipeline.py .
+
+# Make port 8000 available to the world outside this container
 EXPOSE 8000
 
-# Run FastAPI server using Uvicorn
+# Create a non-root user and switch to it
+RUN useradd -m appuser && chown -R appuser /app
+USER appuser
+
+# Run the application
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
