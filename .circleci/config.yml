@@ -1,0 +1,54 @@
+version: 2.1
+
+jobs:
+  # Install Dependencies and Run Tests
+  test:
+    docker:
+      - image: circleci/python:3.9
+    steps:
+      - checkout
+      - setup_remote_docker
+      - restore_cache:
+          keys:
+            - v1-dependencies-{{ checksum "requirements.txt" }}
+      - run:
+          name: Install Dependencies
+          command: |
+            python -m venv venv
+            . venv/bin/activate
+            pip install -r requirements.txt
+      - save_cache:
+          paths:
+            - "./venv"
+          key: v1-dependencies-{{ checksum "requirements.txt" }}
+      - run:
+          name: Run Tests
+          command: |
+            . venv/bin/activate
+            pytest tests --disable-warnings
+
+  # Build Docker Image and Push to Docker Hub
+  build_and_push:
+    docker:
+      - image: circleci/python:3.9
+    steps:
+      - checkout
+      - setup_remote_docker:
+          version: 20.10.7
+      - run:
+          name: Build Docker Image
+          command: docker build -t your-dockerhub-username/churn-prediction-app:$CIRCLE_SHA1 .
+      - run:
+          name: Push Docker Image
+          command: |
+            echo $DOCKERHUB_PASS | docker login -u $DOCKERHUB_USER --password-stdin
+            docker push your-dockerhub-username/churn-prediction-app:$CIRCLE_SHA1
+
+workflows:
+  version: 2
+  ci_cd:
+    jobs:
+      - test
+      - build_and_push:
+          requires:
+            - test
