@@ -35,6 +35,9 @@ jobs:
   build_and_push:
     docker:
       - image: circleci/python:3.12
+        auth:
+          username: $DOCKERHUB_USERNAME
+          password: $DOCKERHUB_PASSWORD
     steps:
       - checkout
       - setup_remote_docker:
